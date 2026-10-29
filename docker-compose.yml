@@ -1,35 +1,36 @@
+version: '3.8'
+
 services:
   api:
     build:
       context: .
       dockerfile: server/Dockerfile
-    # Bound to localhost by default: only this machine can reach the API.
-    # To expose it on your network/internet, bind wider here AND set API_KEY
-    # below explicitly (otherwise a fresh key is generated per container).
     ports:
-      - "127.0.0.1:4000:4000"
+      - "4000:4000" # Quitamos el 127.0.0.1 para que Dockploy y la red Docker lo accedan correctamente
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - API_KEY=${API_KEY:-}
-      - API_HOST=0.0.0.0 # safe: still only published to 127.0.0.1 above
+      - API_HOST=0.0.0.0
       - WEB_ORIGIN=${WEB_ORIGIN:-http://localhost:3000}
       - DATA_DIR=/app/data
-      # Leave unset unless you put your own trusted reverse proxy in front of
-      # the web service (see README > Security defaults) — otherwise a caller
-      # could forge X-Forwarded-For to dodge the /api/ai rate limit.
       - TRUST_PROXY=${TRUST_PROXY:-}
     volumes:
       - terminal-data:/app/data
     restart: unless-stopped
+    networks:
+      - app-net
 
   web:
     build:
       context: .
       dockerfile: web/Dockerfile
     ports:
-      - "127.0.0.1:4001:3000"
+      - "4001:3000" # Quitamos el 127.0.0.1 aquí también para que Dockploy pueda rutearlo
     environment:
-      - API_URL=http://api:4000
+      # Dependiendo de si tu frontend corre en el navegador o en servidor Node:
+      # Si es SSR (Server-Side Rendering), usa http://api:4000
+      # Si el cliente (navegador) hace el llamado directo, debes usar la URL pública con la que Dockploy expone la API.
+      - API_URL=${API_URL:-http://api:4000}
       - API_KEY=${API_KEY:-}
       - API_KEY_FILE=/app/data/.api-key
     volumes:
@@ -37,6 +38,12 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+    networks:
+      - app-net
 
 volumes:
   terminal-data:
+
+networks:
+  app-net:
+    driver: bridge
